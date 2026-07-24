@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Wind Tunnel Simulation - Mats (Custom Emitter Edition)</title>
+	<style>
+		body {
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+			font-size: 13px;
+			background-color: #0a0a0e;
+			color: #eee;
+			margin: 10px;
+			user-select: none;
+			overflow: hidden;
+		}			
+		.button {
+			background-color: #22222e;
+			border: 1px solid #3a3a4c;
+			color: white;
+			padding: 6px 10px;
+			font-size: 12px;
+			margin: 2px;
+			cursor: pointer;
+			border-radius: 4px;
+			transition: all 0.15s ease;
+		}
+		.button:hover {
+			background-color: #323244;
+			border-color: #555566;
+		}
+		.button.active {
+			background-color: #0088cc;
+			border-color: #00aabb;
+			font-weight: bold;
+			box-shadow: 0 0 8px rgba(0, 136, 204, 0.5);
+		}
+		/* Stylings für den neuen Menü-Button oben rechts */
+		.menu-btn {
+			position: fixed;
+			top: 18px;
+			right: 22px;
+			background-color: #22222e;
+			border: 1px solid #0088cc;
+			color: white;
+			padding: 6px 14px;
+			font-size: 12px;
+			font-weight: bold;
+			border-radius: 4px;
+			text-decoration: none;
+			cursor: pointer;
+			z-index: 1000;
+			transition: all 0.15s ease;
+			box-shadow: 0 0 6px rgba(0, 136, 204, 0.3);
+		}
+		.menu-btn:hover {
+			background-color: #0088cc;
+			box-shadow: 0 0 12px rgba(0, 136, 204, 0.7);
+			color: #fff;
+		}
+		.slider {
+			-webkit-appearance: none;
+			appearance: none;
+			width: 80px;
+			height: 5px;
+			border-radius: 5px;
+			background: #333;
+			outline: none;
+			vertical-align: middle;
+		}
+		.slider::-webkit-slider-thumb {
+			-webkit-appearance: none;
+			appearance: none;
+			width: 13px;
+			height: 13px;
+			border-radius: 50%;
+			background: #0088cc;
+			cursor: pointer;
+		}
+		#uiPanel {
+			margin-bottom: 8px;
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 8px;
+			background: #14141d;
+			padding: 10px 12px;
+			border-radius: 8px;
+			border: 1px solid #222230;
+			padding-right: 90px; /* Platz für den Menü-Button frei halten */
+		}
+		.tool-group {
+			border-left: 1px solid #2d2d3f;
+			padding-left: 8px;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+		select {
+			background: #22222e;
+			color: white;
+			border: 1px solid #3a3a4c;
+			padding: 4px 8px;
+			border-radius: 4px;
+			font-size: 12px;
+			cursor: pointer;
+		}
+		.copyright-tag {
+			font-size: 11px;
+			color: #777;
+			margin-left: auto;
+			font-weight: bold;
+		}
+	</style>
+</head>
+
+<body>
+
+	<!-- NEUER MENÜ-BUTTON (Hier DEIN_LINK_HIER anpassen) -->
+	<a href="DEIN_LINK_HIER" class="menu-btn">☰ Menü</a>
+
+	<div id="uiPanel">
+		<div>
+			<button class="button" id="startButton" onclick="toggleStart()">Pause</button>
+			<button class="button" onclick="setupScene()">Reset</button>
+			<button class="button" onclick="clearWalls()">🧹 Wände leeren</button>
+		</div>
+
+		<div class="tool-group">
+			<strong>👁️ Ansicht:</strong>
+			<select id="viewMode" onchange="scene.viewMode = this.value">
+				<option value="smoke">Rauch & Strömung</option>
+				<option value="pressure">Druckfeld (Hoch / Tiefdruck)</option>
+				<option value="velocity">Geschwindigkeitsfeld</option>
+				<option value="all">Kombiniert (Alles)</option>
+			</select>
+		</div>
+
+		<div class="tool-group">
+			<strong>Werkzeuge:</strong>
+			<button class="button active" id="toolMove" onclick="selectTool('move')">🔴 Kugel</button>
+			<button class="button" id="toolBlock" onclick="selectTool('block')">✏️ Wand</button>
+			<button class="button" id="toolErase" onclick="selectTool('erase')">🧽 Radieren</button>
+			<button class="button" id="toolPush" onclick="selectTool('push')">🖐️ Impuls</button>
+			<button class="button" id="toolEmitter" onclick="selectTool('emitter')">💨 Emitter</button>
+			<button class="button" id="toolSensor" onclick="selectTool('sensor')">🧭 Sensor</button>
+		</div>
+
+		<div class="tool-group">
+			<strong>Material:</strong>
+			<select id="emitterType" onchange="scene.emitterType = this.value">
+				<option value="smoke">🌫️ Rauch (Standard)</option>
+				<option value="sand">🏜️ Pudersand (Schwer)</option>
+				<option value="sparks">✨ Funken / Glut</option>
+				<option value="neon">🌈 Neon-Pink</option>
+			</select>
+		</div>
+
+		<div class="tool-group">
+			Dicke: 
+			<input type="range" min="1" max="6" value="2" class="slider" oninput="scene.brushSize = parseInt(this.value)">
+		</div>
+
+		<div class="tool-group">
+			Wind: 
+			<input type="range" min="0" max="50" value="20" class="slider" oninput="scene.windSpeed = parseFloat(this.value) * 0.1">
+		</div>
+
+		<div class="tool-group">
+			Preset:
+			<select onchange="loadPreset(this.value); this.value='';">
+				<option value="">Preset wählen...</option>
+				<option value="funnel">Trichter / Düse</option>
+				<option value="slalom">Slalom-Parcours</option>
+				<option value="airfoil">Flügel-Profil</option>
+			</select>
+		</div>
+
+		<div class="copyright-tag">
+			© Mats
+		</div>
+	</div>
+
+	<canvas id="myCanvas" style="border:1px solid #2d2d3f; background-color: #030305; cursor: crosshair; border-radius: 4px;"></canvas>
+
+<script>
+	var canvas = document.getElementById("myCanvas");
+	var c = canvas.getContext("2d");	
+
+	var simHeight = 1.0;	
+	var cScale, simWidth;
+
+	function resizeCanvas() {
+		canvas.width = window.innerWidth - 24;
+		canvas.height = window.innerHeight - 90;
+		cScale = canvas.height / simHeight;
+		simWidth = canvas.width / cScale;
+	}
+	resizeCanvas();
+
+	window.addEventListener('resize', () => {
+		resizeCanvas();
+		if (scene.fluid) updateObstacles();
+	});
+
+	var U_FIELD = 0;
+	var V_FIELD = 1;
+
+	function clamp(x, min, max) {
+		return Math.min(Math.max(x, min), max);
+	}
+
+	// ----------------- Eulerian Fluid Class ------------------------------
+
+	class Fluid {
+		constructor(density, numX, numY, h) {
+			this.density = density;
+			this.numX = numX;
+			this.numY = numY;
+			this.numCells = numX * numY;
+			this.h = h;
+
+			this.u = new Float32Array(this.numCells);
+			this.v = new Float32Array(this.numCells);
+			this.newU = new Float32Array(this.numCells);
+			this.newV = new Float32Array(this.numCells);
+			this.p = new Float32Array(this.numCells);
+			this.s = new Float32Array(this.numCells);
+			this.customSolid = new Uint8Array(this.numCells);
+
+			this.s.fill(1.0);
+			this.customSolid.fill(0);
+		}
+
+		solveIncompressibility(numIters, dt) {
+			var n = this.numY;
+			var cp = this.density * this.h / dt;
+
+			for (var iter = 0; iter < numIters; iter++) {
+				for (var i = 1; i < this.numX - 1; i++) {
+					for (var j = 1; j < this.numY - 1; j++) {
+						var center = i * n + j;
+						if (this.s[center] === 0.0) continue;
+
+						var left = (i - 1) * n + j;
+						var right = (i + 1) * n + j;
+						var bottom = i * n + j - 1;
+						var top = i * n + j + 1;
+
+						var sx0 = this.s[left];
+						var sx1 = this.s[right];
+						var sy0 = this.s[bottom];
+						var sy1 = this.s[top];
+						var sSum = sx0 + sx1 + sy0 + sy1;
+
+						if (sSum === 0.0) continue;
+
+						var div = this.u[right] - this.u[center] + this.v[top] - this.v[center];
+
+						var p = -div / sSum;
+						p *= 1.9; // Over-relaxation
+						this.p[center] += cp * p;
+
+						this.u[center] -= sx0 * p;
+						this.u[right] += sx1 * p;
+						this.v[center] -= sy0 * p;
+						this.v[top] += sy1 * p;
+					}
+				}
+			}
+		}
+
+		extrapolate() {
+			var n = this.numY;
+			for (var i = 0; i < this.numX; i++) {
+				this.u[i * n + 0] = this.u[i * n + 1];
+				this.u[i * n + n - 1] = this.u[i * n + n - 2];
+			}
+			for (var j = 0; j < this.numY; j++) {
+				this.v[0 * n + j] = this.v[1 * n + j];
+				this.v[(this.numX - 1) * n + j] = this.v[(this.numX - 2) * n + j];
+			}
+		}
+
+		sampleField(x, y, field) {
+			var n = this.numY;
+			var h = this.h;
+			var h1 = 1.0 / h;
+			var h2 = 0.5 * h;
+
+			x = clamp(x, h, this.numX * h);
+			y = clamp(y, h, this.numY * h);
+
+			var dx = 0.0;
+			var dy = 0.0;
+			var f;
+
+			switch (field) {
+				case U_FIELD: f = this.u; dy = h2; break;
+				case V_FIELD: f = this.v; dx = h2; break;
+			}
+
+			var x0 = Math.min(Math.floor((x - dx) * h1), this.numX - 2);
+			var tx = ((x - dx) - x0 * h) * h1;
+			var x1 = Math.min(x0 + 1, this.numX - 1);
+
+			var y0 = Math.min(Math.floor((y - dy) * h1), this.numY - 2);
+			var ty = ((y - dy) - y0 * h) * h1;
+			var y1 = Math.min(y0 + 1, this.numY - 1);
+
+			var sx = 1.0 - tx;
+			var sy = 1.0 - ty;
+
+			return sx * sy * f[x0 * n + y0] +
+				   tx * sy * f[x1 * n + y0] +
+				   tx * ty * f[x1 * n + y1] +
+				   sx * ty * f[x0 * n + y1];
+		}
+
+		advectVel(dt) {
+			this.newU.set(this.u);
+			this.newV.set(this.v);
+
+			var n = this.numY;
+			var h = this.h;
+			var h2 = 0.5 * h;
+
+			for (var i = 1; i < this.numX; i++) {
+				for (var j = 1; j < this.numY; j++) {
+
+					if (this.s[i * n + j] !== 0.0 && this.s[(i - 1) * n + j] !== 0.0 && j < this.numY - 1) {
+						var x = i * h;
+						var y = j * h + h2;
+						var u = this.u[i * n + j];
+						var v = this.sampleField(x, y, V_FIELD);
+
+						x = x - dt * u;
+						y = y - dt * v;
+						u = this.sampleField(x, y, U_FIELD);
+						this.newU[i * n + j] = u;
+					}
+
+					if (this.s[i * n + j] !== 0.0 && this.s[i * n + j - 1] !== 0.0 && i < this.numX - 1) {
+						var x = i * h + h2;
+						var y = j * h;
+						var u = this.sampleField(x, y, U_FIELD);
+						var v = this.v[i * n + j];
+
+						x = x - dt * u;
+						y = y - dt * v;
+						v = this.sampleField(x, y, V_FIELD);
+						this.newV[i * n + j] = v;
+					}
+				}
+			}
+
+			this.u.set(this.newU);
+			this.v.set(this.newV);
+		}
+
+		simulate(dt, windSpeed, numIters) {
+			var n = this.numY;
+
+			for (var j = 0; j < this.numY; j++) {
+				this.u[0 * n + j] = windSpeed;
+				this.u[1 * n + j] = windSpeed;
+			}
+
+			this.advectVel(dt);
+			this.p.fill(0.0);
+			this.solveIncompressibility(numIters, dt);
+			this.extrapolate();
+		}
+	}
+
+	// ----------------- Particle System ----------------------------------
+
+	class ParticleSystem {
+		constructor(maxParticles) {
+			this.maxParticles = maxParticles;
+			this.pos = new Float32Array(2 * maxParticles);
+			this.vel = new Float32Array(2 * maxParticles);
+			this.type = new Uint8Array(maxParticles); // 0: smoke, 1: sand, 2: sparks, 3: neon
+			this.initParticles();
+		}
+
+		initParticles() {
+			for (var i = 0; i < this.maxParticles; i++) {
+				this.resetParticle(i);
+				this.pos[2 * i] = Math.random() * simWidth;
+			}
+		}
+
+		resetParticle(i) {
+			var pTypeStr = scene.emitterType;
+
+			if (scene.customEmitters.length > 0 && Math.random() < 0.8) {
+				var em = scene.customEmitters[Math.floor(Math.random() * scene.customEmitters.length)];
+				this.pos[2 * i] = em.x + (Math.random() - 0.5) * 0.015;
+				this.pos[2 * i + 1] = em.y + (Math.random() - 0.5) * 0.015;
+				pTypeStr = em.type;
+			} else {
+				this.pos[2 * i] = 0.005;
+				this.pos[2 * i + 1] = Math.random() * simHeight;
+			}
+
+			this.vel[2 * i] = 0;
+			this.vel[2 * i + 1] = 0;
+
+			if (pTypeStr === 'sand') this.type[i] = 1;
+			else if (pTypeStr === 'sparks') this.type[i] = 2;
+			else if (pTypeStr === 'neon') this.type[i] = 3;
+			else this.type[i] = 0;
+		}
+
+		update(dt, fluid) {
+			var n = fluid.numY;
+			var h1 = 1.0 / fluid.h;
+
+			for (var i = 0; i < this.maxParticles; i++) {
+				var x = this.pos[2 * i];
+				var y = this.pos[2 * i + 1];
+				var pType = this.type[i];
+
+				var uTarget = fluid.sampleField(x, y, U_FIELD);
+				var vTarget = fluid.sampleField(x, y, V_FIELD);
+
+				if (pType === 1) { 
+					// Pudersand: Trägheit + Schwerkraft
+					this.vel[2 * i] += (uTarget - this.vel[2 * i]) * 7.0 * dt;
+					this.vel[2 * i + 1] += (vTarget - this.vel[2 * i + 1]) * 7.0 * dt - 0.22 * dt;
+				} else if (pType === 2) {
+					// Funken: Schneller mit leichtem Zittern
+					this.vel[2 * i] = uTarget + (Math.random() - 0.5) * 0.08;
+					this.vel[2 * i + 1] = vTarget + (Math.random() - 0.5) * 0.08;
+				} else {
+					// Rauch & Neon: Exakte Luftströmung
+					this.vel[2 * i] = uTarget;
+					this.vel[2 * i + 1] = vTarget;
+				}
+
+				x += this.vel[2 * i] * dt;
+				y += this.vel[2 * i + 1] * dt;
+
+				var xi = Math.floor(x * h1);
+				var yi = Math.floor(y * h1);
+				
+				if (xi >= 0 && xi < fluid.numX && yi >= 0 && yi < fluid.numY) {
+					if (fluid.s[xi * n + yi] === 0.0) {
+						this.resetParticle(i);
+						continue;
+					}
+				}
+
+				if (x > simWidth || x < 0 || y > simHeight || y < 0) {
+					this.resetParticle(i);
+				} else {
+					this.pos[2 * i] = x;
+					this.pos[2 * i + 1] = y;
+				}
+			}
+		}
+	}
+
+	// ----------------- Scene & Controls ---------------------------------
+
+	var scene = {
+		windSpeed: 2.0,
+		dt: 1.0 / 60.0,
+		numIters: 60,
+		paused: false,
+		obstacleX: 0.3 * simWidth,
+		obstacleY: 0.5 * simHeight,
+		obstacleRadius: 0.08,
+		brushSize: 2,
+		activeTool: 'move',
+		emitterType: 'smoke',
+		viewMode: 'smoke',
+		smokeColor: 'rgba(0, 220, 255, 0.65)',
+		customEmitters: [],
+		customSensors: [],
+		fluid: null,
+		particles: null
+	};
+
+	function setupScene() {
+		var res = 160; 
+		var h = simHeight / res;
+		var numX = Math.floor(simWidth / h);
+		var numY = Math.floor(simHeight / h);
+		var density = 1000.0;
+
+		scene.fluid = new Fluid(density, numX, numY, h);
+		scene.particles = new ParticleSystem(5000);
+		scene.customEmitters = [];
+		scene.customSensors = [];
+
+		updateObstacles();
+	}
+
+	function clearWalls() {
+		scene.fluid.customSolid.fill(0);
+		scene.customEmitters = [];
+		scene.customSensors = [];
+		updateObstacles();
+	}
+
+	function updateObstacles() {
+		var f = scene.fluid;
+		var n = f.numY;
+		var r = scene.obstacleRadius * (scene.brushSize / 2);
+
+		for (var i = 1; i < f.numX - 1; i++) {
+			for (var j = 1; j < f.numY - 1; j++) {
+
+				var isBlock = f.customSolid[i * n + j] === 1;
+
+				var dx = (i + 0.5) * f.h - scene.obstacleX;
+				var dy = (j + 0.5) * f.h - scene.obstacleY;
+				var isSphere = (dx * dx + dy * dy < r * r);
+
+				if (isBlock || isSphere) {
+					f.s[i * n + j] = 0.0;
+					f.u[i * n + j] = 0.0;
+					f.u[(i + 1) * n + j] = 0.0;
+					f.v[i * n + j] = 0.0;
+					f.v[i * n + j + 1] = 0.0;
+				} else {
+					f.s[i * n + j] = 1.0;
+				}
+			}
+		}
+	}
+
+	function selectTool(tool) {
+		scene.activeTool = tool;
+		var tools = ['move', 'block', 'erase', 'push', 'emitter', 'sensor'];
+		tools.forEach(t => {
+			var btn = document.getElementById('tool' + t.charAt(0).toUpperCase() + t.slice(1));
+			if (btn) btn.className = 'button' + (tool === t ? ' active' : '');
+		});
+	}
+
+	function loadPreset(preset) {
+		clearWalls();
+		var f = scene.fluid;
+		var n = f.numY;
+
+		if (preset === 'funnel') {
+			for (var i = 20; i < 80; i++) {
+				var topJ = Math.floor(f.numY - i * 0.6);
+				var botJ = Math.floor(i * 0.6);
+				for (var k = topJ; k < f.numY; k++) f.customSolid[i * n + k] = 1;
+				for (var k = 0; k <= botJ; k++) f.customSolid[i * n + k] = 1;
+			}
+		} else if (preset === 'slalom') {
+			for (var j = 0; j < f.numY * 0.65; j++) f.customSolid[50 * n + Math.floor(j)] = 1;
+			for (var j = Math.floor(f.numY * 0.35); j < f.numY; j++) f.customSolid[100 * n + Math.floor(j)] = 1;
+			for (var j = 0; j < f.numY * 0.65; j++) f.customSolid[150 * n + Math.floor(j)] = 1;
+		} else if (preset === 'airfoil') {
+			for (var i = 50; i < 130; i++) {
+				var thick = Math.sin((i - 50) / 80 * Math.PI) * 24;
+				var midJ = Math.floor(f.numY * 0.5);
+				for (var j = Math.floor(midJ - thick * 0.3); j <= Math.floor(midJ + thick * 0.7); j++) {
+					if (j >= 0 && j < f.numY) f.customSolid[i * n + j] = 1;
+				}
+			}
+		}
+		updateObstacles();
+	}
+
+	// ----------------- Rendering Helpers --------------------------------
+
+	function cX(x) { return x * cScale; }
+	function cY(y) { return canvas.height - y * cScale; }
+
+	function drawSmoothWalls() {
+		var f = scene.fluid;
+		var n = f.numY;
+
+		c.fillStyle = "#666677";
+		c.strokeStyle = "#888899";
+		c.lineWidth = 1.5;
+
+		c.beginPath();
+
+		for (var i = 0; i < f.numX - 1; i++) {
+			for (var j = 0; j < f.numY - 1; j++) {
+				var bl = f.customSolid[i * n + j];
+				var br = f.customSolid[(i + 1) * n + j];
+				var tr = f.customSolid[(i + 1) * n + (j + 1)];
+				var tl = f.customSolid[i * n + (j + 1)];
+
+				var caseIndex = (tl << 3) | (tr << 2) | (br << 1) | bl;
+				if (caseIndex === 0) continue;
+
+				var x = i * f.h;
+				var y = j * f.h;
+				var h = f.h;
+
+				var x0 = cX(x),          y0 = cY(y);
+				var x1 = cX(x + h),      y1 = cY(y + h);
+				var xMid = cX(x + h/2),  yMid = cY(y + h/2);
+
+				if (caseIndex === 15) {
+					c.rect(x0, y1, x1 - x0, y0 - y1);
+				} else {
+					var pN = [xMid, y1]; 
+					var pE = [x1, yMid]; 
+					var pS = [xMid, y0]; 
+					var pW = [x0, yMid]; 
+
+					var poly = [];
+					switch (caseIndex) {
+						case 1:  poly = [pW, pS, [x0, y0]]; break;
+						case 2:  poly = [pS, pE, [x1, y0]]; break;
+						case 3:  poly = [pW, pE, [x1, y0], [x0, y0]]; break;
+						case 4:  poly = [pE, pN, [x1, y1]]; break;
+						case 5:  poly = [pW, pN, [x1, y1], pE, pS, [x0, y0]]; break;
+						case 6:  poly = [pS, pN, [x1, y1], [x1, y0]]; break;
+						case 7:  poly = [pW, pN, [x1, y1], [x1, y0], [x0, y0]]; break;
+						case 8:  poly = [pN, pW, [x0, y1]]; break;
+						case 9:  poly = [pN, pS, [x0, y0], [x0, y1]]; break;
+						case 10: poly = [pN, pE, [x1, y0], pS, pW, [x0, y1]]; break;
+						case 11: poly = [pN, pE, [x1, y0], [x0, y0], [x0, y1]]; break;
+						case 12: poly = [pE, pW, [x0, y1], [x1, y1]]; break;
+						case 13: poly = [pE, pS, [x0, y0], [x0, y1], [x1, y1]]; break;
+						case 14: poly = [pS, pW, [x0, y1], [x1, y1], [x1, y0]]; break;
+					}
+
+					if (poly.length > 0) {
+						c.moveTo(poly[0][0], poly[0][1]);
+						for (var k = 1; k < poly.length; k++) {
+							c.lineTo(poly[k][0], poly[k][1]);
+						}
+						c.closePath();
+					}
+				}
+			}
+		}
+		c.fill();
+		c.stroke();
+	}
+
+	function drawLegend(title, labelMin, labelMax, colorStops) {
+		var x = 15, y = canvas.height - 35;
+		var w = 160, h = 12;
+
+		c.fillStyle = "rgba(10, 10, 16, 0.75)";
+		c.fillRect(x - 8, y - 22, w + 16, h + 32);
+		c.strokeStyle = "#333344";
+		c.strokeRect(x - 8, y - 22, w + 16, h + 32);
+
+		c.fillStyle = "#ffffff";
+		c.font = "bold 11px sans-serif";
+		c.textAlign = "left";
+		c.fillText(title, x, y - 8);
+
+		var grad = c.createLinearGradient(x, 0, x + w, 0);
+		colorStops.forEach(cs => grad.addColorStop(cs.pos, cs.color));
+
+		c.fillStyle = grad;
+		c.fillRect(x, y, w, h);
+
+		c.fillStyle = "#aaa";
+		c.font = "10px sans-serif";
+		c.fillText(labelMin, x, y + h + 10);
+		c.textAlign = "right";
+		c.fillText(labelMax, x + w, y + h + 10);
+	}
+
+	function draw() {
+		c.clearRect(0, 0, canvas.width, canvas.height);
+
+		var f = scene.fluid;
+		var n = f.numY;
+		var mode = scene.viewMode;
+
+		// 1. Druckfeld
+		if (mode === 'pressure' || mode === 'all') {
+			for (var i = 0; i < f.numX; i++) {
+				for (var j = 0; j < f.numY; j++) {
+					if (f.s[i * n + j] === 0.0) continue;
+
+					var p = f.p[i * n + j];
+					var x = i * f.h;
+					var y = j * f.h;
+
+					var val = clamp(p * 0.0004, -1.0, 1.0);
+
+					var r = 0, g = 0, b = 0;
+					if (val > 0) {
+						r = Math.floor(255 * val);
+						g = Math.floor(100 * (1.0 - val));
+					} else {
+						b = Math.floor(255 * Math.abs(val));
+						g = Math.floor(100 * (1.0 - Math.abs(val)));
+					}
+
+					c.fillStyle = "rgba(" + r + "," + g + "," + b + ", 0.85)";
+					c.fillRect(cX(x), cY(y + f.h), f.h * cScale + 0.5, f.h * cScale + 0.5);
+				}
+			}
+		}
+
+		// 2. Geschwindigkeitsfeld
+		if (mode === 'velocity') {
+			for (var i = 0; i < f.numX; i++) {
+				for (var j = 0; j < f.numY; j++) {
+					if (f.s[i * n + j] === 0.0) continue;
+
+					var u = f.u[i * n + j];
+					var v = f.v[i * n + j];
+					var speed = Math.hypot(u, v);
+					var normSpeed = clamp(speed / (scene.windSpeed * 2.2), 0.0, 1.0);
+
+					var r = Math.floor(255 * Math.max(0, (normSpeed - 0.5) * 2));
+					var g = Math.floor(255 * (1 - Math.abs(normSpeed - 0.5) * 2));
+					var b = Math.floor(255 * Math.max(0, (0.5 - normSpeed) * 2));
+
+					c.fillStyle = "rgba(" + r + "," + g + "," + b + ", 0.85)";
+					c.fillRect(cX(i * f.h), cY(j * f.h + f.h), f.h * cScale + 0.5, f.h * cScale + 0.5);
+				}
+			}
+		}
+
+		// 3. Glatte Wände
+		drawSmoothWalls();
+
+		// 4. Strömungslinien
+		if (mode === 'smoke' || mode === 'all') {
+			c.strokeStyle = "rgba(255, 255, 255, 0.25)";
+			c.lineWidth = 1;
+			var step = 3;
+			for (var i = 0; i < f.numX; i += step) {
+				for (var j = 0; j < f.numY; j += step) {
+					var x = (i + 0.5) * f.h;
+					var y = (j + 0.5) * f.h;
+					var u = f.u[i * n + j];
+					var v = f.v[i * n + j];
+
+					c.beginPath();
+					c.moveTo(cX(x), cY(y));
+					c.lineTo(cX(x + u * 0.03), cY(y + v * 0.03));
+					c.stroke();
+				}
+			}
+		}
+
+		// 5. Partikel mit Material-Spezifischen Farben & Größen
+		if ((mode === 'smoke' || mode === 'all') && scene.particles) {
+			for (var i = 0; i < scene.particles.maxParticles; i++) {
+				var px = cX(scene.particles.pos[2 * i]);
+				var py = cY(scene.particles.pos[2 * i + 1]);
+				var pType = scene.particles.type[i];
+
+				if (pType === 1) {
+					c.fillStyle = "#e5c185";
+					c.fillRect(px, py, 2.2, 2.2);
+				} else if (pType === 2) {
+					c.fillStyle = "#ffaa11";
+					c.fillRect(px, py, 2.0, 2.0);
+				} else if (pType === 3) {
+					c.fillStyle = "#ff22aa";
+					c.fillRect(px, py, 2.0, 2.0);
+				} else {
+					c.fillStyle = scene.smokeColor;
+					c.fillRect(px, py, 1.8, 1.8);
+				}
+			}
+		}
+
+		// 6. Emitter
+		scene.customEmitters.forEach(em => {
+			var px = cX(em.x);
+			var py = cY(em.y);
+
+			if (em.type === 'sand') c.fillStyle = "#e5c185";
+			else if (em.type === 'sparks') c.fillStyle = "#ffaa11";
+			else if (em.type === 'neon') c.fillStyle = "#ff22aa";
+			else c.fillStyle = "#00ffcc";
+
+			c.beginPath();
+			c.arc(px, py, 5, 0, 2 * Math.PI);
+			c.fill();
+			c.strokeStyle = "#ffffff";
+			c.lineWidth = 1;
+			c.stroke();
+		});
+
+		// 7. Windmesser (Sensoren)
+		scene.customSensors.forEach(s => {
+			var u = f.sampleField(s.x, s.y, U_FIELD);
+			var v = f.sampleField(s.x, s.y, V_FIELD);
+			var speed = Math.hypot(u, v);
+
+			var px = cX(s.x);
+			var py = cY(s.y);
+
+			c.strokeStyle = "#ffcc00";
+			c.lineWidth = 2;
+			c.beginPath();
+			c.arc(px, py, 9, 0, 2 * Math.PI);
+			c.stroke();
+
+			c.fillStyle = "#ffcc00";
+			c.beginPath();
+			c.arc(px, py, 3, 0, 2 * Math.PI);
+			c.fill();
+
+			var speedText = speed.toFixed(2) + " m/s";
+			c.font = "bold 12px 'Segoe UI', sans-serif";
+			var textWidth = c.measureText(speedText).width;
+
+			c.fillStyle = "rgba(10, 10, 16, 0.85)";
+			c.fillRect(px - textWidth / 2 - 4, py - 27, textWidth + 8, 16);
+
+			c.strokeStyle = "#ffcc00";
+			c.lineWidth = 1;
+			c.strokeRect(px - textWidth / 2 - 4, py - 27, textWidth + 8, 16);
+
+			c.fillStyle = "#ffffff";
+			c.textAlign = "center";
+			c.fillText(speedText, px, py - 15);
+		});
+
+		// 8. Kugel-Hindernis
+		var sphereR = scene.obstacleRadius * (scene.brushSize / 2);
+		c.fillStyle = "#ff3344";
+		c.beginPath();
+		c.arc(cX(scene.obstacleX), cY(scene.obstacleY), sphereR * cScale, 0, 2 * Math.PI);
+		c.fill();
+		c.strokeStyle = "#ffffff";
+		c.lineWidth = 2;
+		c.stroke();
+
+		// Legenden für Ansichten
+		if (mode === 'pressure' || mode === 'all') {
+			drawLegend("DRUCKFELD", "Unterdruck (Sog)", "Staudruck (Hoch)", [
+				{pos: 0, color: "rgb(0, 0, 255)"},
+				{pos: 0.5, color: "rgb(0, 100, 0)"},
+				{pos: 1, color: "rgb(255, 0, 0)"}
+			]);
+		} else if (mode === 'velocity') {
+			drawLegend("GESCHWINDIGKEIT", "Langsam (0 m/s)", "Schnell", [
+				{pos: 0, color: "rgb(0, 0, 255)"},
+				{pos: 0.5, color: "rgb(0, 255, 0)"},
+				{pos: 1, color: "rgb(255, 0, 0)"}
+			]);
+		}
+	}
+
+	// ----------------- Interaction Logic -------------------------------
+
+	var mouseDown = false;
+	var lastSimX = 0, lastSimY = 0;
+
+	function applySmoothLine(x0, y0, x1, y1, radius, fillVal) {
+		var f = scene.fluid;
+		var n = f.numY;
+
+		var dist = Math.hypot(x1 - x0, y1 - y0);
+		var steps = Math.max(1, Math.ceil(dist / (f.h * 0.4)));
+
+		for (var s = 0; s <= steps; s++) {
+			var t = s / steps;
+			var cx = x0 + t * (x1 - x0);
+			var cy = y0 + t * (y1 - y0);
+
+			var minI = clamp(Math.floor((cx - radius) / f.h), 1, f.numX - 2);
+			var maxI = clamp(Math.ceil((cx + radius) / f.h), 1, f.numX - 2);
+			var minJ = clamp(Math.floor((cy - radius) / f.h), 1, f.numY - 2);
+			var maxJ = clamp(Math.ceil((cy + radius) / f.h), 1, f.numY - 2);
+
+			for (var i = minI; i <= maxI; i++) {
+				for (var j = minJ; j <= maxJ; j++) {
+					var cellX = (i + 0.5) * f.h;
+					var cellY = (j + 0.5) * f.h;
+					var dx = cellX - cx;
+					var dy = cellY - cy;
+
+					if (dx * dx + dy * dy <= radius * radius) {
+						f.customSolid[i * n + j] = fillVal;
+					}
+				}
+			}
+		}
+	}
+
+	function handleInteraction(x, y, isClick) {
+		let bounds = canvas.getBoundingClientRect();
+		let mx = x - bounds.left;
+		let my = y - bounds.top;
+
+		var simX = mx / cScale;
+		var simY = (canvas.height - my) / cScale;
+
+		var f = scene.fluid;
+		var n = f.numY;
+
+		if (scene.activeTool === 'move') {
+			scene.obstacleX = simX;
+			scene.obstacleY = simY;
+		} 
+		else if (scene.activeTool === 'block' || scene.activeTool === 'erase') {
+			var brushRadius = f.h * (1.5 * scene.brushSize); 
+			var fillVal = (scene.activeTool === 'block') ? 1 : 0;
+
+			var startX = isClick ? simX : lastSimX;
+			var startY = isClick ? simY : lastSimY;
+
+			applySmoothLine(startX, startY, simX, simY, brushRadius, fillVal);
+		}
+		else if (scene.activeTool === 'push') {
+			var dx = (simX - lastSimX) * 20;
+			var dy = (simY - lastSimY) * 20;
+
+			var xi = Math.floor(simX / f.h);
+			var yi = Math.floor(simY / f.h);
+
+			if (xi > 1 && xi < f.numX - 2 && yi > 1 && yi < f.numY - 2) {
+				f.u[xi * n + yi] += dx;
+				f.v[xi * n + yi] += dy;
+			}
+		}
+		else if (scene.activeTool === 'emitter' && isClick) {
+			scene.customEmitters.push({ x: simX, y: simY, type: scene.emitterType });
+		}
+		else if (scene.activeTool === 'sensor' && isClick) {
+			scene.customSensors.push({ x: simX, y: simY });
+		}
+
+		lastSimX = simX;
+		lastSimY = simY;
+
+		updateObstacles();
+	}
+
+	canvas.addEventListener('mousedown', event => {
+		if (event.button === 2) { // Rechtsklick: Sensoren löschen
+			let bounds = canvas.getBoundingClientRect();
+			let simX = (event.clientX - bounds.left) / cScale;
+			let simY = (canvas.height - (event.clientY - bounds.top)) / cScale;
+			scene.customSensors = scene.customSensors.filter(s => Math.hypot(s.x - simX, s.y - simY) > 0.03);
+			return;
+		}
+		mouseDown = true;
+		let bounds = canvas.getBoundingClientRect();
+		lastSimX = (event.clientX - bounds.left) / cScale;
+		lastSimY = (canvas.height - (event.clientY - bounds.top)) / cScale;
+		handleInteraction(event.clientX, event.clientY, true);
+	});
+
+	canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+	canvas.addEventListener('mouseup', () => mouseDown = false);
+
+	canvas.addEventListener('mousemove', event => {
+		if (mouseDown) {
+			handleInteraction(event.clientX, event.clientY, false);
+		}
+	});
+
+	canvas.addEventListener('touchstart', event => {
+		mouseDown = true;
+		let bounds = canvas.getBoundingClientRect();
+		lastSimX = (event.touches[0].clientX - bounds.left) / cScale;
+		lastSimY = (canvas.height - (event.touches[0].clientY - bounds.top)) / cScale;
+		handleInteraction(event.touches[0].clientX, event.touches[0].clientY, true);
+	});
+
+	canvas.addEventListener('touchend', () => mouseDown = false);
+
+	canvas.addEventListener('touchmove', event => {
+		event.preventDefault();
+		if (mouseDown) {
+			handleInteraction(event.touches[0].clientX, event.touches[0].clientY, false);
+		}
+	}, { passive: false });
+
+	function toggleStart() {
+		var button = document.getElementById('startButton');
+		scene.paused = !scene.paused;
+		button.innerHTML = scene.paused ? "Start" : "Pause";
+	}
+
+	function update() {
+		if (!scene.paused) {
+			scene.fluid.simulate(scene.dt, scene.windSpeed, scene.numIters);
+			if (scene.particles) {
+				scene.particles.update(scene.dt, scene.fluid);
+			}
+		}
+		draw();
+		requestAnimationFrame(update);
+	}
+
+	// Simulation starten
+	setupScene();
+	update();
+</script>
+</body>
+</html>
